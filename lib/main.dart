@@ -244,6 +244,16 @@ Future<void> main() async {
   // Set up background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
+  // Check for initial message (app opened from terminated state)
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    if (kDebugMode) {
+      print('App opened from terminated state via notification: ${initialMessage.messageId}');
+    }
+    // Save initial message to local storage
+    await saveMessage(initialMessage);
+  }
+
   // Subscribe to a topic
   await messaging.subscribeToTopic('all');
 
