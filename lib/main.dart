@@ -44,7 +44,10 @@ Future<void> saveMessage(RemoteMessage message) async {
     await prefs.setStringList(_messagesStorageKey, messagesJson);
     
     if (kDebugMode) {
-      print('Message saved to local storage');
+      print('✓ Message saved to local storage');
+      print('  MessageId: ${message.messageId}');
+      print('  Title: ${message.notification?.title ?? "N/A"}');
+      print('  Total saved messages: ${messagesJson.length}');
     }
   } catch (e) {
     if (kDebugMode) {
@@ -245,13 +248,25 @@ Future<void> main() async {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // Check for initial message (app opened from terminated state)
+  // This MUST be called before runApp() to catch the initial message
   final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-  if (initialMessage != null) {
-    if (kDebugMode) {
-      print('App opened from terminated state via notification: ${initialMessage.messageId}');
+  if (kDebugMode) {
+    print('Checking for initial message...');
+    if (initialMessage != null) {
+      print('✓ Initial message found in main(): ${initialMessage.messageId}');
+      print('  Title: ${initialMessage.notification?.title}');
+      print('  Body: ${initialMessage.notification?.body}');
+      print('  Data: ${initialMessage.data}');
+    } else {
+      print('✗ No initial message found in main()');
     }
+  }
+  if (initialMessage != null) {
     // Save initial message to local storage
     await saveMessage(initialMessage);
+    if (kDebugMode) {
+      print('Initial message saved to storage');
+    }
   }
 
   // Subscribe to a topic
@@ -307,6 +322,83 @@ class _MyHomePageState extends State<MyHomePage> {
     _getToken();
     _loadSavedMessages();
     _setupMessageListener();
+    // Also check for initial message as a backup (in case main() missed it)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkInitialMessage();
+    });
+  }
+
+  Future<void> _checkInitialMessage() async {
+    if (kDebugMode) {
+      print('Waiting 3 seconds before checking for initial message in initState()...');
+    }
+    
+    // Wait 3 seconds before checking for initial message
+    await Future.delayed(const Duration(seconds: 3));
+    
+    if (kDebugMode) {
+      print('Checking for initial message in initState()...');
+    }
+    
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      if (kDebugMode) {
+        print('✓ Initial message found in initState(): ${initialMessage.messageId}');
+        print('  Title: ${initialMessage.notification?.title}');
+        print('  Body: ${initialMessage.notification?.body}');
+        print('  Data: ${initialMessage.data}');
+      }
+      
+      // Save initial message to local storage
+      await saveMessage(initialMessage);
+      
+      // Reload saved messages to show the new one
+      if (mounted) {
+        await _loadSavedMessages();
+        
+        // Show snackbar to notify user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'App opened from notification',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (initialMessage.notification?.title != null)
+                  Text(
+                    initialMessage.notification!.title!,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                if (initialMessage.notification?.body != null)
+                  Text(
+                    initialMessage.notification!.body!,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+              ],
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    } else {
+      if (kDebugMode) {
+        print('✗ No initial message found in initState()');
+      }
+    }
   }
 
   Future<void> _getToken() async {
